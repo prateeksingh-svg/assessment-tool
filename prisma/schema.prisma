@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AssessmentLink {
+  id               String             @id @default(cuid())
+  token            String             @unique
+  label            String?
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  candidates       Candidate[]
+  batchSchedules   BatchSchedule[]
+
+  @@index([token])
+  @@index([isActive])
+}
+
+model Candidate {
+  id               String             @id @default(cuid())
+  fullName         String
+  email            String
+  mobile           String
+  linkId           String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  link             AssessmentLink     @relation(fields: [linkId], references: [id])
+  session          CandidateSession?
+  responses        CandidateResponse[]
+  scores           CandidateScore?
+  aiReviews        AIReview[]
+
+  @@unique([email, linkId])
+  @@index([email])
+  @@index([linkId])
+}
+
+model CandidateSession {
+  id                String    @id @default(cuid())
+  candidateId       String    @unique
+  startedAt         DateTime  @default(now())
+  submittedAt       DateTime?
+  submissionType    String?   // "manual" | "auto"
+  timeTaken         Int?      // seconds
+  tabSwitchCount    Int       @default(0)
+  questionOrder     Json      // Array of question IDs in randomized order
+  isCompleted       Boolean   @default(false)
+  lastSavedAt       DateTime  @default(now())
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+}
+
+model CandidateResponse {
+  id          String    @id @default(cuid())
+  candidateId String
+  questionId  String
+  answer      Int?      // option index selected (0-3)
+  savedAt     DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@unique([candidateId, questionId])
+  @@index([candidateId])
+  @@index([questionId])
+}
+
+model CandidateScore {
+  id               String    @id @default(cuid())
+  candidateId      String    @unique
+  intentScore      Float     @default(0)
+  englishScore     Float     @default(0)
+  salesScore       Float     @default(0)
+  personalityScore Float     @default(0)
+  aptitudeScore    Float     @default(0)
+  overallScore     Float     @default(0)
+  rank             Int?
+  status           String    @default("pending") // "shortlisted" | "under_review" | "not_selected" | "pending"
+  percentile       Float?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  candidate        Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([overallScore])
+  @@index([rank])
+  @@index([status])
+}
+
+model BatchSchedule {
+  id                String         @id @default(cuid())
+  batchName         String
+  scheduledDate     DateTime
+  expectedCandidates Int           @default(0)
+  status            String         @default("scheduled") // "scheduled" | "active" | "completed"
+  linkId            String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  link              AssessmentLink @relation(fields: [linkId], references: [id])
+
+  @@index([linkId])
+  @@index([scheduledDate])
+}
+
+model AIReview {
+  id            String    @id @default(cuid())
+  candidateId   String?
+  provider      String    // "openai" | "anthropic"
+  reviewType    String    // "individual" | "batch"
+  prompt        String    @db.Text
+  review        String    @db.Text
+  filters       Json?
+  promptVersion String    @default("1.0")
+  createdAt     DateTime  @default(now())
+  candidate     Candidate? @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+  @@index([reviewType])
+}
